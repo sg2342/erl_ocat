@@ -1,0 +1,25 @@
+{application, erl_ocat,
+ [{description, "erlang onioncat"},
+  {vsn, git},
+  {registered, []},
+  {applications, [kernel, stdlib]},
+  {mod, {erl_ocat_app, []}},
+  {env, [
+	 {acceptors, 3},
+	 {listen_port, 8060},
+	 {listen_address, {127,0,1,1}},
+	 {socks_address, {127,0,1,1}},
+	 {socks_port, 9050}
+	]},
+  {modules, [erl_ocat,
+	     erl_ocat_app,
+	     erl_ocat_sup,
+	     erl_ocat_tun,
+	     erl_ocat_listener,
+	     erl_ocat_acceptor_sup,
+	     erl_ocat_acceptor,
+	     erl_ocat_peer_sup,
+	     erl_ocat_peer
+	    ]}
+ ]
+}.

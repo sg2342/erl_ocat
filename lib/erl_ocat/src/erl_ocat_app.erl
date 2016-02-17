@@ -4,12 +4,6 @@
 
 -export([start/2, stop/1]).
 
-start(_StartType, _StartArgs) ->
-    case erl_ocat_sup:start_link() of
-	{ok, Pid} ->
-	    {ok, Pid};
-	Error ->
-	    Error
-    end.
+start(_StartType, _StartArgs) -> erl_ocat_sup:start_link().
 
 stop(_State) -> ok.

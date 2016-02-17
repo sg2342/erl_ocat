@@ -11,18 +11,15 @@
 
 -record(s, {}).
 
-start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+start_link() -> gen_server:start_link(?MODULE, [], []).
 
-init([]) ->
-    {ok, #s{}, 0}.
+init([]) -> {ok, #s{}, 0}.
 
-handle_call(_Request, _From, State) ->
-    Reply = ok,
-    {reply, Reply, State}.
+-spec handle_call(_, _, _) -> no_return().
+handle_call(Call, _From, _State) -> throw({unhandled_call, Call}).
 
-handle_cast(_Msg, State) ->
-    {noreply, State}.
+-spec handle_cast(_, _) -> no_return().
+handle_cast(Cast, _State) -> throw({unhandled_cast, Cast}).
 
 handle_info(timeout, #s{} = State) ->
     Delay = fun({error, emfile}) -> ?EMFILE_BACKOFF;
@@ -33,17 +30,15 @@ handle_info(timeout, #s{} = State) ->
 	    {error, _} = E -> E;
 	    {ok, ListenSocket} -> do_accept(ListenSocket)
 	end,
-    {noreply, State, Delay(D)}.
+    {noreply, State, Delay(D)};
+handle_info(Info, _State) -> throw({unhandled_info, Info}).
 
 do_accept(ListenSocket) ->
     case gen_tcp:accept(ListenSocket) of
 	{error, _} = E -> E;
-	{ok, Socket} -> erl_ocat_peer:start(Socket)
+	{ok, Socket} -> erl_ocat_peer:accepted(Socket)
     end.
 
+terminate(_Reason, _State) -> ok.
 
-terminate(_Reason, _State) ->
-    ok.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+code_change(_OldVsn, State, _Extra) -> {ok, State}.

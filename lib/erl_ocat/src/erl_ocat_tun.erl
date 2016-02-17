@@ -18,27 +18,24 @@ init([]) ->
 		 undefined -> "tun99";
 		 {ok, [_|_] = T} -> T end,
     {ok, FD} = procket:dev(TunDev),
-    TUNSIFHEAD = procket_ioctl:iow($t,96,4),
-    {ok, _} =  procket:ioctl(FD, TUNSIFHEAD, <<1:32/native>>),
+    TUNSIFHEAD = procket_ioctl:iow($t, 96, 4),
+    {ok, _} =  procket:ioctl(FD, TUNSIFHEAD, << 1:32/native >>),
     Port = open_port({fd, FD, FD}, [stream, binary]),
     {ok, #s{fd = FD, port = Port}}.
 
 handle_call(fd, _From, #s{fd = FD} = State) -> {reply, {ok, FD}, State};
-handle_call(_Request, _From, State) ->
-    Reply = ok,
-    {reply, Reply, State}.
+handle_call(Call, _From, _State) -> throw({unhandled_call, Call}).
 
-handle_cast(_Msg, State) ->
-    {noreply, State}.
+-spec handle_cast(_, _) -> no_return().
+handle_cast(Cast, _State) -> throw({unhandled_cast, Cast}).
 
-handle_info({Port, {data, <<0,0,0,28, Bin/binary>>}},
+
+handle_info({Port, {data, << 0, 0, 0, 16#1c, Bin/binary >>}},
 	    #s{port = Port} = State) ->
     _ = erl_ocat_peer:tun_in(Bin),
     {noreply, State};
-handle_info(_Info, State) ->
-    {noreply, State}.
+handle_info(Info, _State) -> throw({unhandled_info, Info}).
 
-terminate(_Reason, _State) ->
-    ok.
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+terminate(_Reason, _State) -> ok.
+
+code_change(_OldVsn, State, _Extra) -> {ok, State}.

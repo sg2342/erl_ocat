@@ -19,21 +19,17 @@ init([]) ->
 
 handle_call(socket, _From, #s{socket = Socket} = State) ->
     {reply, {ok, Socket}, State};
-handle_call(_Request, _From, State) ->
-    Reply = ok,
-    {reply, Reply, State}.
+handle_call(Call, _From, _State) -> throw({unhandled_call, Call}).
 
-handle_cast(_Msg, State) ->
-    {noreply, State}.
+-spec handle_cast(_, _) -> no_return().
+handle_cast(Cast, _State) -> throw({unhandled_cast, Cast}).
 
-handle_info(_Info, State) ->
-    {noreply, State}.
+-spec handle_info(_,_) -> no_return().
+handle_info(Info, _State) -> throw({unhandled_info, Info}).
 
-terminate(_Reason, _State) ->
-    ok.
+terminate(_Reason, _State) -> ok.
 
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 listen() ->
     LOpts = [binary, {packet, 0}, {active, false}, {reuseaddr, true},

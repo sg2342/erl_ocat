@@ -110,7 +110,7 @@ tcp_data(<<6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
 	 forward, State) ->
     tcp_data1(Len, Frag, Bin, State);
 tcp_data(<<6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
-	   Source:128/binary,
+	   Source:16/binary,
 	   _Destination:128,
 	   _Payload:Len/binary, Frag/binary>> = Bin,
 	 wait_1st_from_socket, #s{} = State) ->

@@ -17,7 +17,7 @@
 %% fd87:d87e:eb43::/48
 -define(Prefix, 16#fd87d87eeb43).
 
--record(s, {socket, frag = <<>>, fd}).
+-record(s, {socket, frag = <<>>, fd, receiver_authentication}).
 
 accepted(Socket) ->
     {ok, Pid} = erl_ocat_peer_sup:start_child(),
@@ -46,12 +46,19 @@ to_onion(<< _:10/binary >> = Bin) ->
 
 start_link() -> gen_fsm:start_link(?MODULE, [], []).
 
-init([]) -> {ok, wait_accept_or_tun, #s{}, 1000}.
+init([]) ->
+    {ok, A} = application:get_env(receiver_authentication),
+    {ok, wait_accept_or_tun, #s{receiver_authentication= A}, 1000}.
 
 wait_accept_or_tun(timeout, State) ->
     {stop, normal, State};
-wait_accept_or_tun({accepted, Socket}, #s{} = State) ->
+wait_accept_or_tun({accepted, Socket},
+		   #s{receiver_authentication = false} = State) ->
     next_state(wait_1st_from_socket, State#s{socket = Socket});
+wait_accept_or_tun({accepted, Socket},
+		     #s{receiver_authentication = true} = State) ->
+    {ok, FD} = erl_ocat_tun:fd(),
+    next_state(forward, State#s{socket = Socket, fd = FD});
 wait_accept_or_tun({tun, Dst, Pkt}, #s{} = State) ->
     case erl_ocat_reg:insert(Dst) of
 	false -> {stop, normal, State};

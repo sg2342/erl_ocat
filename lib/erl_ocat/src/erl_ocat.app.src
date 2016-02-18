@@ -15,7 +15,8 @@
 	 {listen_port, 8060},
 	 {listen_address, {127,0,1,1}},
 	 {socks_address, {127,0,1,1}},
-	 {socks_port, 9050}
+	 {socks_port, 9050},
+	 {receiver_authentication, true}
 	]},
   {modules, [erl_ocat,
 	     erl_ocat_app,

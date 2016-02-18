@@ -21,11 +21,11 @@ accepted(Socket) ->
 tun_in(<< 16#6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8, _Src:128,
 	  Dst:16/binary,
 	  _Data:Len/binary >> = Pkt) ->
-    N = to_onion(Dst),
-    try N ! {tun, Pkt}, ok
-    catch error:badarg ->
+    case erl_ocat_reg:lookup(Dst) of
+	undefined ->
 	    {ok, Pid} = erl_ocat_peer_sup:start_child(),
-	    gen_fsm:send_event(Pid, {tun, N, Pkt})
+	    gen_fsm:send_event(Pid, {tun, Dst, Pkt});
+	Pid -> Pid ! {tun, Pkt}
     end;
 tun_in(_) -> {error, invalid}.
 
@@ -35,7 +35,7 @@ to_onion(<< _:10/binary >> = Bin) ->
 	     (I) when is_integer(I), I >= 0, I =< 25 -> I + $a
 	  end,
     B0 = << <<(Enc(I))>> || <<I:5>> <= Bin >>,
-    list_to_atom(binary_to_list(B0) ++ ".onion").
+    <<B0/binary, ".onion">>.
 
 start_link() -> gen_fsm:start_link(?MODULE, [], []).
 
@@ -45,15 +45,18 @@ wait_accept_or_tun(timeout, State) ->
     {stop, normal, State};
 wait_accept_or_tun({accepted, Socket}, #s{} = State) ->
     next_state(wait_1st_from_socket, State#s{socket = Socket});
-wait_accept_or_tun({tun, N, Pkt}, #s{} = State) ->
-    register(N, self()),
-    {ok, FD} = erl_ocat_tun:fd(),
-    case socks_connect(N) of
-	{ok, Socket} ->
-	    ok = gen_tcp:send(Socket, Pkt),
-	    next_state(forward, State#s{socket = Socket, fd = FD});
-	{error, _} ->
-	    {stop, normal, State}
+wait_accept_or_tun({tun, Dst, Pkt}, #s{} = State) ->
+    case erl_ocat_reg:insert(Dst) of
+	false -> {stop, normal, State};
+	true ->
+	    {ok, FD} = erl_ocat_tun:fd(),
+	    case socks_connect(to_onion(Dst)) of
+		{ok, Socket} ->
+		    ok = gen_tcp:send(Socket, Pkt),
+		    next_state(forward, State#s{socket = Socket, fd = FD});
+		{error, _} ->
+		    {stop, normal, State}
+	    end
     end.
 
 wait_1st_from_socket(timeout, State) -> {stop, normal, State}.
@@ -100,8 +103,10 @@ tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
 	    Frag/binary >> = Bin,
 	 wait_1st_from_socket, #s{} = State) ->
     {ok, FD} = erl_ocat_tun:fd(),
-    register(to_onion(Src), self()),
-    tcp_data1(Len, Frag, Bin, State#s{fd = FD});
+    case erl_ocat_reg:insert(Src) of
+	false -> {stop, normal, State};
+	true -> tcp_data1(Len, Frag, Bin, State#s{fd = FD})
+    end;
 tcp_data(Frag, StateName, #s{} = State) ->
     next_state(StateName, State#s{frag = Frag}).
 
@@ -115,11 +120,10 @@ next_state(StateName, #s{socket = S} = State) ->
     ok = inet:setopts(S, [{active, once}]),
     {next_state, StateName, State}.
 
-socks_connect(N) ->
+socks_connect(Address) ->
     {ok, TAddress} = application:get_env(socks_address),
     {ok, TPort} = application:get_env(socks_port),
     {ok, Port} = application:get_env(listen_port),
-    Address = list_to_binary(atom_to_list(N)),
     Req = << 16#4, 16#1, Port:16, 16#1:32, 0, Address/binary, 0 >>,
     case gen_tcp:connect(TAddress, TPort, [binary, {active, false}]) of
 	{error, _} = E -> E;

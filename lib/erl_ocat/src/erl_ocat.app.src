@@ -1,7 +1,13 @@
 {application, erl_ocat,
  [{description, "erlang onioncat"},
   {vsn, git},
-  {registered, []},
+  {registered, [erl_ocat_sup,
+		erl_ocat_reg,
+	        erl_ocat_tun,
+	        erl_ocat_listener,
+	        erl_ocat_acceptor_sup,
+		erl_ocat_peer_sup
+	       ]},
   {applications, [kernel, stdlib]},
   {mod, {erl_ocat_app, []}},
   {env, [
@@ -14,6 +20,7 @@
   {modules, [erl_ocat,
 	     erl_ocat_app,
 	     erl_ocat_sup,
+	     erl_ocat_reg,
 	     erl_ocat_tun,
 	     erl_ocat_listener,
 	     erl_ocat_acceptor_sup,

@@ -11,6 +11,12 @@
 
 -define(IPv6_HEADER_SIZE, 40).
 
+%% FD60:DB4D:DDB5::/48
+%%-define(Prefix, 16#FD60DB4DDDB5).
+
+%% fd87:d87e:eb43::/48
+-define(Prefix, 16#fd87d87eeb43).
+
 -record(s, {socket, frag = <<>>, fd}).
 
 accepted(Socket) ->
@@ -18,8 +24,8 @@ accepted(Socket) ->
     ok = gen_tcp:controlling_process(Socket, Pid),
     gen_fsm:send_event(Pid, {accepted, Socket}).
 
-tun_in(<< 16#6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8, _Src:128,
-	  Dst:16/binary,
+tun_in(<< 16#6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
+	  ?Prefix:48, _Src:80, ?Prefix:48, Dst:80,
 	  _Data:Len/binary >> = Pkt) ->
     case erl_ocat_reg:lookup(Dst) of
 	undefined ->
@@ -29,6 +35,7 @@ tun_in(<< 16#6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8, _Src:128,
     end;
 tun_in(_) -> {error, invalid}.
 
+to_onion(Dst) when is_integer(Dst) -> to_onion(<<Dst:80>>);
 to_onion(<< _:6/binary, X:10/binary >>) -> to_onion(X);
 to_onion(<< _:10/binary >> = Bin) ->
     Enc = fun(I) when is_integer(I), I >= 26, I =< 31 -> I + 24;
@@ -93,13 +100,16 @@ terminate(_Reason, _StateName, _State) -> ok.
 code_change(_OldVsn, StateName, State, _Extra) -> {ok, StateName, State}.
 
 tcp_data(<< 16#6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
-	    _Src:128, _Dst:128, _Payload:Len/binary,
+	    ?Prefix:48, _Src:80, ?Prefix:48, _Dst:80, _Data:Len/binary,
 	    Frag/binary >> = Bin,
-	 forward, State) ->
+	 forward, #s{} = State) ->
     tcp_data1(Len, Frag, Bin, State);
+tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8, _Src:128,
+	    _Dst:128, _Data:Len/binary, Frag/binary >>,
+	 forward, State) -> % Prefix mismatch: drop
+    next_state(forward, State#s{frag = Frag});
 tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
-	    Src:16/binary,
-	    _Dst:128, _Data:Len/binary,
+	    ?Prefix:48, Src:80, ?Prefix:48, _Dst:80, _Data:Len/binary,
 	    Frag/binary >> = Bin,
 	 wait_1st_from_socket, #s{} = State) ->
     {ok, FD} = erl_ocat_tun:fd(),
@@ -107,6 +117,10 @@ tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
 	false -> {stop, normal, State};
 	true -> tcp_data1(Len, Frag, Bin, State#s{fd = FD})
     end;
+tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8, _Src:128,
+	    _Dst:128, _Data:Len/binary, _Frag/binary >>,
+	 wait_1st_from_socket, State) -> % Prefix mismatch: die
+    {stop, normal, State};
 tcp_data(Frag, StateName, #s{} = State) ->
     next_state(StateName, State#s{frag = Frag}).
 

@@ -14,9 +14,7 @@ start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 fd() -> gen_server:call(?MODULE, fd).
 
 init([]) ->
-    TunDev = case application:get_env(tundev) of
-		 undefined -> "tun99";
-		 {ok, [_|_] = T} -> T end,
+    {ok, TunDev} = application:get_env(tundev),
     {ok, FD} = procket:dev(TunDev),
     TUNSIFHEAD = procket_ioctl:iow($t, 96, 4),
     {ok, _} =  procket:ioctl(FD, TUNSIFHEAD, << 1:32/native >>),

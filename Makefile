@@ -10,6 +10,9 @@ DIALYZER_W?= -Wunmatched_returns \
 
 all: compile
 
+release: compile
+	@${REBAR} generate
+
 compile: deps
 	@${REBAR} compile
 

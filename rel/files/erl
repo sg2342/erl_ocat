@@ -1,0 +1,22 @@
+#!/bin/sh
+
+ERTS_BIN_DIR=$(cd "${0%/*}" && pwd)
+ROOTDIR=${ERTS_BIN_DIR%/*}
+
+EMU=beam
+PROGNAME=erl
+
+read START_ERL < "$ROOTDIR/releases/start_erl.data"
+
+ERTS_VSN=${START_ERL% *}
+APP_VSN=${START_ERL#* }
+
+BINDIR=$ROOTDIR/erts-$ERTS_VSN/bin
+
+export EMU
+export PROGNAME
+export BINDIR
+export ROOTDIR
+
+exec "$BINDIR/erlexec" -boot "$ROOTDIR/releases/$APP_VSN/start_clean" ${1+"$@"}
+

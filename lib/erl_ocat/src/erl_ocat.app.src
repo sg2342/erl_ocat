@@ -16,6 +16,7 @@
 	 {listen_address, {127,0,1,1}},
 	 {socks_address, {127,0,1,1}},
 	 {socks_port, 9050},
+	 {tundev, "tun99"},
 	 {receiver_authentication, true}
 	]},
   {modules, [erl_ocat,

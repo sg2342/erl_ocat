@@ -17,7 +17,7 @@
 %% fd87:d87e:eb43::/48
 -define(Prefix, 16#fd87d87eeb43).
 
--record(s, {socket, frag = <<>>, fd, receiver_authentication}).
+-record(s, {socket, frag = <<>>, fd_pih, receiver_authentication}).
 
 accepted(Socket) ->
     {ok, Pid} = erl_ocat_peer_sup:start_child(),
@@ -56,18 +56,19 @@ wait_accept_or_tun({accepted, Socket},
 		   #s{receiver_authentication = false} = State) ->
     next_state(wait_1st_from_socket, State#s{socket = Socket});
 wait_accept_or_tun({accepted, Socket},
-		     #s{receiver_authentication = true} = State) ->
-    {ok, FD} = erl_ocat_tun:fd(),
-    next_state(forward, State#s{socket = Socket, fd = FD});
+		   #s{receiver_authentication = true} = State) ->
+    {ok, {FD, PIH}} = erl_ocat_tun:fd_pih(),
+    next_state(forward, State#s{socket = Socket, fd_pih = {FD, PIH}});
 wait_accept_or_tun({tun, Dst, Pkt}, #s{} = State) ->
     case erl_ocat_reg:insert(Dst) of
 	false -> {stop, normal, State};
 	true ->
-	    {ok, FD} = erl_ocat_tun:fd(),
+	    {ok, {FD, PIH}} = erl_ocat_tun:fd_pih(),
 	    case socks_connect(to_onion(Dst)) of
 		{ok, Socket} ->
 		    ok = gen_tcp:send(Socket, Pkt),
-		    next_state(forward, State#s{socket = Socket, fd = FD});
+		    next_state(forward, State#s{socket = Socket,
+						fd_pih = {FD, PIH}});
 		{error, _} ->
 		    {stop, normal, State}
 	    end
@@ -119,10 +120,10 @@ tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8,
 	    ?Prefix:48, Src:80, ?Prefix:48, _Dst:80, _Data:Len/binary,
 	    Frag/binary >> = Bin,
 	 wait_1st_from_socket, #s{} = State) ->
-    {ok, FD} = erl_ocat_tun:fd(),
+    {ok, {FD, PIH}} = erl_ocat_tun:fd_pih(),
     case erl_ocat_reg:insert(Src) of
 	false -> {stop, normal, State};
-	true -> tcp_data1(Len, Frag, Bin, State#s{fd = FD})
+	true -> tcp_data1(Len, Frag, Bin, State#s{fd_pih = {FD, PIH}})
     end;
 tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8, _Src:128,
 	    _Dst:128, _Data:Len/binary, _Frag/binary >>,
@@ -131,10 +132,10 @@ tcp_data(<< 6:4, _Class:8, _Flow:20, Len:16, _Next:8, _Hop:8, _Src:128,
 tcp_data(Frag, StateName, #s{} = State) ->
     next_state(StateName, State#s{frag = Frag}).
 
-tcp_data1(Len, Frag, Bin, #s{fd = FD} = State) ->
+tcp_data1(Len, Frag, Bin, #s{fd_pih = {FD, PIH}} = State) ->
     Sz = ?IPv6_HEADER_SIZE + Len,
     << Pkt:Sz/binary, _/binary >> = Bin,
-    procket:write(FD, << 0, 0, 0, 16#1C, Pkt/binary >>),
+    procket:write(FD, << PIH:4/binary, Pkt/binary >>),
     next_state(forward, State#s{frag = Frag}).
 
 next_state(StateName, #s{socket = S} = State) ->
